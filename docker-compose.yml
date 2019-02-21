@@ -1,7 +1,7 @@
 version: '2.4'
 services:
-  hello-svc:
-    image: "servantscode/hello:latest"
+  note-svc-svc:
+    image: "servantscode/note-svc:latest"
     ports:
      - "8080:8080"
     mem_limit: 128m

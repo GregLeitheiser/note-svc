@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hello-svc
+  name: note-svc
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: hello-svc
+      app: note-svc
   template:
     metadata:
       labels:
-        app: hello-svc
+        app: note-svc
     spec:
       containers:
-      - name: hello-svc
-        image: servantscode/hello-svc
+      - name: note-svc
+        image: servantscode/note-svc
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
@@ -28,10 +28,10 @@ spec:
 kind: Service
 apiVersion: v1
 metadata:
-  name: hello-svc
+  name: note-svc
 spec:
   selector:
-    app: hello-svc
+    app: note-svc
   ports:
   - protocol: TCP
     port: 8080
