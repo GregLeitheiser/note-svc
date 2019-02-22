@@ -8,13 +8,19 @@ import org.servantscode.note.Note;
 import org.servantscode.note.db.NoteDB;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.SecurityContext;
 import java.time.ZonedDateTime;
 import java.util.List;
+
+import static java.util.Arrays.asList;
+import static org.servantscode.commons.StringUtils.isEmpty;
 
 @Path("/note")
 public class NoteSvc extends SCServiceBase {
     private static final Logger LOG = LogManager.getLogger(NoteSvc.class);
+    private static final List<String> REFERENCEABLE_TYPES = asList("person", "family", "ministry", "room", "equpiment");
 
     private NoteDB db;
 
@@ -25,7 +31,7 @@ public class NoteSvc extends SCServiceBase {
     @GET @Produces(MediaType.APPLICATION_JSON)
     public PaginatedResponse<Note> getNotes(@QueryParam("start") @DefaultValue("0") int start,
                                             @QueryParam("count") @DefaultValue("10") int count,
-                                            @QueryParam("created_time") @DefaultValue("id") String sortField,
+                                            @QueryParam("sort_field") @DefaultValue("created_time") String sortField,
                                             @QueryParam("search") @DefaultValue("") String search) {
 
         verifyUserAccess("note.list");
@@ -66,8 +72,23 @@ public class NoteSvc extends SCServiceBase {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON) @Produces(MediaType.APPLICATION_JSON)
-    public Note createNote(Note note) {
+    public Note createNote(@Context SecurityContext securityContext,
+                           Note note) {
         verifyUserAccess("note.create");
+        if(note.isPrivate())
+            verifyUserAccess("private.note.create");
+
+        if(note.getResourceId() <= 0 ||
+           note.getCreatorId() <= 0 ||
+           !REFERENCEABLE_TYPES.contains(note.getResourceType()))
+            throw new BadRequestException("Illegal note creation requested");
+
+        //TODO: verify referenced object exists
+        note.setCreatedTime(ZonedDateTime.now());
+        //TODO: Set creator id of logged in user
+        //Principal pricipal = securityContext.getUserPrincipal();
+        //note.setCreatorId();
+
         try {
             db.create(note);
             LOG.info("Created note: " + note.getId());
@@ -90,8 +111,8 @@ public class NoteSvc extends SCServiceBase {
         if(existingNote == null)
             throw new NotFoundException();
 
-        if(existingNote.isPrivate())
-            verifyUserAccess("private.note.delete");
+        if(existingNote.isPrivate() || note.isPrivate())
+            verifyUserAccess("private.note.update");
 
         if(existingNote.getResourceId() != note.getResourceId() ||
            existingNote.getCreatorId() != note.getCreatorId() ||
@@ -99,7 +120,8 @@ public class NoteSvc extends SCServiceBase {
             throw new BadRequestException("Illegal note update requested");
 
         try {
-            db.update(note);
+            boolean edited = !existingNote.getNote().equals(note.getNote());
+            db.update(note, edited);
             LOG.info("Edited note: " + note.getId());
             return note;
         } catch (Throwable t) {
@@ -115,11 +137,13 @@ public class NoteSvc extends SCServiceBase {
             throw new NotFoundException();
         try {
             Note note = db.getNote(id);
+            if(note == null)
+                throw new NotFoundException();
+
             if(note.isPrivate())
                 verifyUserAccess("private.note.delete");
 
-            if(note == null || db.delete(id))
-                throw new NotFoundException();
+            db.delete(id);
             LOG.info("Deleted note: " + note.getId());
         } catch (Throwable t) {
             LOG.error("Deleting note failed:", t);

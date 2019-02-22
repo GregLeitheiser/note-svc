@@ -5,7 +5,9 @@ import java.time.ZonedDateTime;
 public class Note {
     private int id;
     private int creatorId;
+    private String creator;
     private ZonedDateTime createdTime;
+    private boolean edited;
     private boolean isPrivate;
     private String resourceType;
     private int resourceId;
@@ -18,8 +20,14 @@ public class Note {
     public int getCreatorId() { return creatorId; }
     public void setCreatorId(int creatorId) { this.creatorId = creatorId; }
 
+    public String getCreator() { return creator; }
+    public void setCreator(String creator) { this.creator = creator; }
+
     public ZonedDateTime getCreatedTime() { return createdTime; }
     public void setCreatedTime(ZonedDateTime createdTime) { this.createdTime = createdTime; }
+
+    public boolean isEdited() { return edited; }
+    public void setEdited(boolean edited) { this.edited = edited; }
 
     public boolean isPrivate() { return isPrivate; }
     public void setPrivate(boolean aPrivate) { isPrivate = aPrivate; }

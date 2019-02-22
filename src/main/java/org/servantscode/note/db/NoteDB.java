@@ -29,7 +29,7 @@ public class NoteDB extends DBAccess {
     }
 
     public List<Note> getNotes(String resourceType, int resourceId, boolean includePrivate, String sortField, int start, int count) {
-        String sql = "SELECT * FROM notes WHERE resource_type=? AND resource_id=?";
+        String sql = "SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE resource_type=? AND resource_id=?";
         sql += includePrivate? "": " AND private=false";
         sql += String.format(" ORDER BY %s %s LIMIT ? OFFSET ?", sortField, (sortField.equals("created_time")? "DESC": ""));
         try (Connection conn = getConnection();
@@ -47,7 +47,7 @@ public class NoteDB extends DBAccess {
 
     public Note getNote(int id) {
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("SELECT * FROM notes WHERE id=?")
+             PreparedStatement stmt = conn.prepareStatement("SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE id=?")
         ) {
             stmt.setInt(1, id);
             List<Note> results = processResults(stmt);
@@ -82,14 +82,16 @@ public class NoteDB extends DBAccess {
         }
     }
 
-    public void update(Note note) {
+    public void update(Note note, boolean edited) {
+        String sql = "UPDATE notes SET private=?, note=?";
+        sql += edited? ", edited=true": "";
+        sql += " WHERE id=?";
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("UPDATE notes SET created_time=?, private=?, note=? WHERE id=?")
+             PreparedStatement stmt = conn.prepareStatement(sql)
         ) {
-            stmt.setTimestamp(1, convert(note.getCreatedTime()));
-            stmt.setBoolean(2, note.isPrivate());
-            stmt.setString(3, note.getNote());
-            stmt.setInt(4, note.getId());
+            stmt.setBoolean(1, note.isPrivate());
+            stmt.setString(2, note.getNote());
+            stmt.setInt(3, note.getId());
 
             if (stmt.executeUpdate() == 0)
                 throw new RuntimeException("Could not update note: " + note.getId());
@@ -118,6 +120,7 @@ public class NoteDB extends DBAccess {
             while(rs.next()) {
                 Note note = new Note();
                 note.setId(rs.getInt("id"));
+                note.setCreator(rs.getString("name"));
                 note.setCreatorId(rs.getInt("creator_id"));
                 note.setCreatedTime(convert(rs.getTimestamp("created_time")));
                 note.setPrivate(rs.getBoolean("private"));
