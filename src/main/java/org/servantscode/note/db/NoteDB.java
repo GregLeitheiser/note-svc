@@ -47,7 +47,7 @@ public class NoteDB extends DBAccess {
 
     public Note getNote(int id) {
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE id=?")
+             PreparedStatement stmt = conn.prepareStatement("SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE n.id=?")
         ) {
             stmt.setInt(1, id);
             List<Note> results = processResults(stmt);
@@ -74,8 +74,10 @@ public class NoteDB extends DBAccess {
             }
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
-                if (rs.next())
+                if (rs.next()) {
                     note.setId(rs.getInt(1));
+                    note.setCreator(getPersonName(note.getCreatorId()));
+                }
             }
         } catch (SQLException e) {
             throw new RuntimeException("Could not create note for : " + note.getResourceType() + ":" + note.getResourceId(), e);
@@ -123,6 +125,7 @@ public class NoteDB extends DBAccess {
                 note.setCreator(rs.getString("name"));
                 note.setCreatorId(rs.getInt("creator_id"));
                 note.setCreatedTime(convert(rs.getTimestamp("created_time")));
+                note.setEdited(rs.getBoolean("edited"));
                 note.setPrivate(rs.getBoolean("private"));
                 note.setResourceType(rs.getString("resource_type"));
                 note.setResourceId(rs.getInt("resource_id"));
@@ -132,4 +135,19 @@ public class NoteDB extends DBAccess {
             return notes;
         }
     }
+
+    private String getPersonName(int creatorId) throws SQLException {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement("SELECT name FROM people WHERE id=?")) {
+            stmt.setInt(1, creatorId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("name");
+                }
+            }
+        }
+        return null;
+    }
+
 }
