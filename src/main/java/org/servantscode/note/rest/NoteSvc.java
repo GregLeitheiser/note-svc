@@ -158,7 +158,8 @@ public class NoteSvc extends SCServiceBase {
             if(note.isPrivate())
                 verifyUserAccess("private.note.delete");
 
-            db.delete(id);
+            if(!db.delete(id))
+                throw new NotFoundException();
             LOG.info("Deleted note: " + note.getId());
         } catch (Throwable t) {
             LOG.error("Deleting note failed:", t);
