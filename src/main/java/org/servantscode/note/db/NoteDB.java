@@ -1,6 +1,7 @@
 package org.servantscode.note.db;
 
 import org.servantscode.commons.db.DBAccess;
+import org.servantscode.commons.search.QueryBuilder;
 import org.servantscode.note.Note;
 
 import java.sql.*;
@@ -10,17 +11,17 @@ import java.util.List;
 public class NoteDB extends DBAccess {
 
     public int getCount(String resourceType, int resourceId, boolean includePrivate) {
-        String sql = "SELECT count(1) FROM notes WHERE resource_type=? AND resource_id=?";
-        sql += includePrivate? "": " AND private=false";
+        QueryBuilder query = count().from("notes")
+                .where("resource_type=?", resourceType)
+                .where("resource_id=?", resourceId);
+//        String sql = "SELECT count(1) FROM notes WHERE resource_type=? AND resource_id=?";
+        if(!includePrivate) query.where("private=false");
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)
+             PreparedStatement stmt = query.prepareStatement(conn);
+            ResultSet rs = stmt.executeQuery()
         ) {
-            stmt.setString(1, resourceType);
-            stmt.setInt(2, resourceId);
-            try(ResultSet rs = stmt.executeQuery()) {
-                if (rs.next())
-                    return rs.getInt(1);
-            }
+            if (rs.next())
+                return rs.getInt(1);
         } catch (SQLException e) {
             throw new RuntimeException("Could not find notes for " + resourceType + ":" + resourceId, e);
         }
@@ -28,17 +29,24 @@ public class NoteDB extends DBAccess {
         return 0;
     }
 
+    private QueryBuilder baseQuery(boolean includePrivate) {
+        QueryBuilder query = select("n.*", "p.name").from("notes n")
+                .join("LEFT JOIN people p ON n.creator_id=p.id");
+        if(!includePrivate) query.where("private=false");
+        return query;
+    }
+
     public List<Note> getNotes(String resourceType, int resourceId, boolean includePrivate, String sortField, int start, int count) {
-        String sql = "SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE resource_type=? AND resource_id=?";
-        sql += includePrivate? "": " AND private=false";
-        sql += String.format(" ORDER BY %s %s LIMIT ? OFFSET ?", sortField, (sortField.equals("created_time")? "DESC": ""));
+        QueryBuilder query = baseQuery(includePrivate)
+                .where("resource_type=?", resourceType)
+                .where("resource_id=?", resourceId);
+        query.sort(sortField + (sortField.equals("created_time")? " DESC": "")).limit(count).offset(start);
+//        String sql = "SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE resource_type=? AND resource_id=?";
+//        sql += includePrivate? "": " AND private=false";
+//        sql += String.format(" ORDER BY %s %s LIMIT ? OFFSET ?", sortField, (sortField.equals("created_time")? "DESC": ""));
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)
+             PreparedStatement stmt = query.prepareStatement(conn)
         ) {
-            stmt.setString(1, resourceType);
-            stmt.setInt(2, resourceId);
-            stmt.setInt(3, count);
-            stmt.setInt(4, start);
             return processResults(stmt);
         } catch (SQLException e) {
             throw new RuntimeException("Could not find notes for " + resourceType + ":" + resourceId, e);
@@ -46,13 +54,11 @@ public class NoteDB extends DBAccess {
     }
 
     public Note getNote(int id) {
+        QueryBuilder query = baseQuery(true).where("n.id=?", id);
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE n.id=?")
+             PreparedStatement stmt = query.prepareStatement(conn)
         ) {
-            stmt.setInt(1, id);
-            List<Note> results = processResults(stmt);
-
-            return results.isEmpty() ? null : results.get(0);
+            return firstOrNull(processResults(stmt));
         } catch (SQLException e) {
             throw new RuntimeException("Could not find note by id " + id, e);
         }
@@ -149,5 +155,4 @@ public class NoteDB extends DBAccess {
         }
         return null;
     }
-
 }

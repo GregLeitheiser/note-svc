@@ -20,7 +20,7 @@ import static java.util.Arrays.asList;
 @Path("/note")
 public class NoteSvc extends SCServiceBase {
     private static final Logger LOG = LogManager.getLogger(NoteSvc.class);
-    private static final List<String> REFERENCEABLE_TYPES = asList("person", "family", "ministry", "room", "equpiment");
+    private static final List<String> REFERENCEABLE_TYPES = asList("person", "family", "ministry", "room", "equpiment", "event");
 
     private NoteDB db;
 
