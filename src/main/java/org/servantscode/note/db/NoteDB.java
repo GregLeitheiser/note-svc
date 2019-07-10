@@ -2,6 +2,7 @@ package org.servantscode.note.db;
 
 import org.servantscode.commons.db.DBAccess;
 import org.servantscode.commons.search.QueryBuilder;
+import org.servantscode.commons.security.OrganizationContext;
 import org.servantscode.note.Note;
 
 import java.sql.*;
@@ -13,8 +14,7 @@ public class NoteDB extends DBAccess {
     public int getCount(String resourceType, int resourceId, boolean includePrivate) {
         QueryBuilder query = count().from("notes")
                 .where("resource_type=?", resourceType)
-                .where("resource_id=?", resourceId);
-//        String sql = "SELECT count(1) FROM notes WHERE resource_type=? AND resource_id=?";
+                .where("resource_id=?", resourceId).inOrg();
         if(!includePrivate) query.where("private=false");
         try (Connection conn = getConnection();
              PreparedStatement stmt = query.prepareStatement(conn);
@@ -31,7 +31,7 @@ public class NoteDB extends DBAccess {
 
     private QueryBuilder baseQuery(boolean includePrivate) {
         QueryBuilder query = select("n.*", "p.name").from("notes n")
-                .join("LEFT JOIN people p ON n.creator_id=p.id");
+                .join("LEFT JOIN people p ON n.creator_id=p.id").inOrg("n.org_id");
         if(!includePrivate) query.where("private=false");
         return query;
     }
@@ -41,9 +41,6 @@ public class NoteDB extends DBAccess {
                 .where("resource_type=?", resourceType)
                 .where("resource_id=?", resourceId);
         query.sort(sortField + (sortField.equals("created_time")? " DESC": "")).limit(count).offset(start);
-//        String sql = "SELECT n.*, p.name FROM notes n LEFT JOIN people p ON n.creator_id=p.id WHERE resource_type=? AND resource_id=?";
-//        sql += includePrivate? "": " AND private=false";
-//        sql += String.format(" ORDER BY %s %s LIMIT ? OFFSET ?", sortField, (sortField.equals("created_time")? "DESC": ""));
         try (Connection conn = getConnection();
              PreparedStatement stmt = query.prepareStatement(conn)
         ) {
@@ -66,7 +63,7 @@ public class NoteDB extends DBAccess {
 
     public void create(Note note) {
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("INSERT INTO notes(creator_id, created_time, private, resource_type, resource_id, note) VALUES (?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)
+             PreparedStatement stmt = conn.prepareStatement("INSERT INTO notes(creator_id, created_time, private, resource_type, resource_id, note, org_id) VALUES (?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)
         ) {
             stmt.setInt(1, note.getCreatorId());
             stmt.setTimestamp(2, convert(note.getCreatedTime()));
@@ -74,6 +71,7 @@ public class NoteDB extends DBAccess {
             stmt.setString(4, note.getResourceType());
             stmt.setInt(5, note.getResourceId());
             stmt.setString(6, note.getNote());
+            stmt.setInt(7, OrganizationContext.orgId());
 
             if (stmt.executeUpdate() == 0) {
                 throw new RuntimeException("Could not create note for " + note.getResourceType() + ":" + note.getResourceId());
@@ -93,13 +91,14 @@ public class NoteDB extends DBAccess {
     public void update(Note note, boolean edited) {
         String sql = "UPDATE notes SET private=?, note=?";
         sql += edited? ", edited=true": "";
-        sql += " WHERE id=?";
+        sql += " WHERE id=? AND org_id=?";
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)
         ) {
             stmt.setBoolean(1, note.isPrivate());
             stmt.setString(2, note.getNote());
             stmt.setInt(3, note.getId());
+            stmt.setInt(4, OrganizationContext.orgId());
 
             if (stmt.executeUpdate() == 0)
                 throw new RuntimeException("Could not update note: " + note.getId());
@@ -111,9 +110,10 @@ public class NoteDB extends DBAccess {
 
     public boolean delete(int id) {
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("DELETE FROM notes WHERE id=?")
+             PreparedStatement stmt = conn.prepareStatement("DELETE FROM notes WHERE id=? AND org_id=?")
         ) {
             stmt.setInt(1, id);
+            stmt.setInt(2, OrganizationContext.orgId());
 
             return stmt.executeUpdate() != 0;
         } catch (SQLException e) {
