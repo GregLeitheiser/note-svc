@@ -123,7 +123,7 @@ public class NoteSvc extends SCServiceBase {
         note.setCreatorId(existingNote.getCreatorId());
         note.setCreatedTime(existingNote.getCreatedTime());
 
-        if(note.getCreatorId() != principal.getUserId() && !securityContext.isUserInRole("system"))
+        if(note.getCreatorId() != principal.getUserId() && !securityContext.isUserInRole("system") && !userHasAccess("admin.note.update"))
             throw new BadRequestException("You can't edit someone else's notes...");
 
         try {
@@ -152,7 +152,7 @@ public class NoteSvc extends SCServiceBase {
                 throw new NotFoundException();
 
             SCPrincipal principal = ((SCPrincipal) securityContext.getUserPrincipal());
-            if(note.getCreatorId() != principal.getUserId() && !securityContext.isUserInRole("system"))
+            if(note.getCreatorId() != principal.getUserId() && !securityContext.isUserInRole("system") && !userHasAccess("admin.note.delete"))
                 throw new BadRequestException("You can't delete someone else's notes...");
 
             if(note.isPrivate())
