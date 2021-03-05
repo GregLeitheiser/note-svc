@@ -11,8 +11,10 @@ import org.servantscode.note.db.NoteDB;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -21,6 +23,8 @@ import static java.util.Arrays.asList;
 public class NoteSvc extends SCServiceBase {
     private static final Logger LOG = LogManager.getLogger(NoteSvc.class);
     private static final List<String> REFERENCEABLE_TYPES = asList("person", "family", "ministry", "room", "equpiment", "event");
+
+    private static final List<String> EXPORTABLE_FIELDS = Arrays.asList("id", "name", "creator_id", "created_time", "edited", "private", "resource_type", "resource_id", "note");
 
     private NoteDB db;
 
@@ -51,6 +55,19 @@ public class NoteSvc extends SCServiceBase {
             return new PaginatedResponse<>(start, results.size(), totalNotes, results);
         } catch (Throwable t) {
             LOG.error("Retrieving people failed:", t);
+            throw t;
+        }
+    }
+
+    @GET @Path("/report") @Produces(MediaType.TEXT_PLAIN)
+    public Response getNotesReport() {
+        verifyUserAccess("note.list");
+
+        try {
+            LOG.trace(String.format("Retrieving note report"));
+            return Response.ok(db.getReportReader(EXPORTABLE_FIELDS)).build();
+        } catch (Throwable t) {
+            LOG.error("Retrieving family report failed:", t);
             throw t;
         }
     }

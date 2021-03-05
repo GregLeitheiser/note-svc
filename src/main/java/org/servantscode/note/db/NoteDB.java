@@ -1,10 +1,15 @@
 package org.servantscode.note.db;
 
 import org.servantscode.commons.db.DBAccess;
+import org.servantscode.commons.db.ReportStreamingOutput;
 import org.servantscode.commons.search.QueryBuilder;
 import org.servantscode.commons.security.OrganizationContext;
 import org.servantscode.note.Note;
 
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.StreamingOutput;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +54,26 @@ public class NoteDB extends DBAccess {
             throw new RuntimeException("Could not find notes for " + resourceType + ":" + resourceId, e);
         }
     }
+
+    public StreamingOutput getReportReader(final List<String> fields) {
+        final QueryBuilder query =select("n.*", "p.name").from("notes n")
+                .join("LEFT JOIN people p ON n.creator_id=p.id").inOrg("n.org_id");
+
+        return new ReportStreamingOutput(fields) {
+            @Override
+            public void write(OutputStream output) throws WebApplicationException {
+                try ( Connection conn = getConnection();
+                      PreparedStatement stmt = query.prepareStatement(conn);
+                      ResultSet rs = stmt.executeQuery()) {
+
+                    writeCsv(output, rs);
+                } catch (SQLException | IOException e) {
+                    throw new RuntimeException("Could not retrieve notes", e);
+                }
+            }
+        };
+    }
+
 
     public Note getNote(int id) {
         QueryBuilder query = baseQuery(true).where("n.id=?", id);
